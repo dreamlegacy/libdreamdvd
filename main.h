@@ -213,6 +213,14 @@ struct spu_map_t {
 	int16_t lang		: 16;
 };
 
+/* struct to maintain audio stream info */
+struct audio_map_t {
+	int8_t logical_id	:  8;
+	int8_t stream_id	:  8;
+	int8_t format    	:  8;
+	int16_t lang		: 16;
+};
+
 /* struct for ddvd nav handle*/
 struct ddvd {
 	/* config options */
@@ -261,7 +269,7 @@ struct ddvd {
 	int angle_current;
 	int angle_num;
 
-	int audio_format[MAX_AUDIO];
+	struct audio_map_t audio_map[MAX_AUDIO];
 	struct spu_map_t spu_map[MAX_SPU];
 };
 

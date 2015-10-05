@@ -27,6 +27,11 @@
 #include "mpegaudioenc.h"
 #include "a52dec.h"
 
+#define Debug(level, str, ...) (DebugLevel > level ? printf("LIBDVD: %07.3f: " str, (float) ddvd_get_time() / 1000.0, ##__VA_ARGS__) : 0)
+#define Perror(msg)            Debug(-1, "%s: %m", msg)
+
+int DebugLevel = 3;
+
 /*
  * local helper functions
  */
@@ -40,7 +45,7 @@ static ssize_t safe_write(int fd, const void *buf, size_t count)
 		n = write(fd, &ptr[written], count - written);
 		if (n < 0) {
 			if (errno != EINTR) {
-				perror("write");
+				Perror("write");
 				return written ? written : -1;
 			}
 		} else {
@@ -72,17 +77,17 @@ static int open_pipe(int fd[2])
 	fd[0] = fd[1] = -1;
 
 	if (pipe(fd) < 0) {
-		perror("pipe");
+		Perror("pipe");
 		goto err;
 	}
 
 	flags = fcntl(fd[0], F_GETFL);
 	if (flags < 0) {
-		perror("F_GETFL");
+		Perror("F_GETFL");
 		goto err;
 	}
 	if (fcntl(fd[0], F_SETFL, flags | O_NONBLOCK) < 0) {
-		perror("F_SETFL");
+		Perror("F_SETFL");
 		goto err;
 	}
 
@@ -112,7 +117,7 @@ struct ddvd *ddvd_create(void)
 
 	pconfig = malloc(sizeof(struct ddvd));
 	if (pconfig == NULL) {
-		perror("malloc");
+		Perror("malloc");
 		return NULL;
 	}
 
@@ -600,7 +605,7 @@ static int readApiFrameRate(int fd, int *framerate)
 enum ddvd_result ddvd_run(struct ddvd *playerconfig)
 {
 	if (playerconfig->lfb == NULL) {
-		printf("Frame/backbuffer not given to libdreamdvd. Will not start the player !\n");
+		Debug(1, "Frame/backbuffer not given to libdreamdvd. Will not start the player !\n");
 		return DDVD_INVAL;
 	}
 
@@ -641,34 +646,34 @@ enum ddvd_result ddvd_run(struct ddvd *playerconfig)
 	// init backbuffer (SPU)
 	ddvd_lbb = malloc(720 * 576);	// the spu backbuffer is always max DVD PAL 720x576 pixel (NTSC 720x480)
 	if (ddvd_lbb == NULL) {
-		perror("SPU-Backbuffer <mem allocation failed>");
+		Perror("SPU-Backbuffer <mem allocation failed>");
 		res = DDVD_NOMEM;
 		goto err_malloc;
 	}
 	ddvd_lbb2 = malloc(ddvd_screeninfo_xres * ddvd_screeninfo_yres * ddvd_screeninfo_bypp);
 	if (ddvd_lbb2 == NULL) {
-		perror("SPU-Backbuffer <mem allocation failed>");
+		Perror("SPU-Backbuffer <mem allocation failed>");
 		res = DDVD_NOMEM;
 		goto err_malloc;
 	}
 	
 	last_iframe = malloc(320 * 1024);
 	if (last_iframe == NULL) {
-		perror("malloc");
+		Perror("malloc");
 		res = DDVD_NOMEM;
 		goto err_malloc;
 	}
 
 	spu_buffer = malloc(2 * (128 * 1024));
 	if (spu_buffer == NULL) {
-		perror("malloc");
+		Perror("malloc");
 		res = DDVD_NOMEM;
 		goto err_malloc;
 	}
 
 	spu_backbuffer = malloc(NUM_SPU_BACKBUFFER * 2 * (128 * 1024));
 	if (spu_backbuffer == NULL) {
-		perror("malloc");
+		Perror("malloc");
 		res = DDVD_NOMEM;
 		goto err_malloc;
 	}
@@ -689,81 +694,81 @@ enum ddvd_result ddvd_run(struct ddvd *playerconfig)
 	safe_write(message_pipe, &msg, sizeof(int));
 	safe_write(message_pipe, &blit_area, sizeof(struct ddvd_resize_return));
 	
-	printf("Opening output...\n");
+	Debug(1, "Opening output...\n");
 
 #if CONFIG_API_VERSION == 1
 	ddvd_output_fd = open("/dev/video", O_WRONLY);
 	if (ddvd_output_fd == -1) {
-		perror("/dev/video");
+		Perror("/dev/video");
 		res = DDVD_BUSY;
 		goto err_open_output_fd;
 	}
 
 	ddvd_fdvideo = open("/dev/dvb/card0/video0", O_RDWR);
 	if (ddvd_fdvideo == -1) {
-		perror("/dev/dvb/card0/video0");
+		Perror("/dev/dvb/card0/video0");
 		res = DDVD_BUSY;
 		goto err_open_fdvideo;
 	}
 
 	ddvd_fdaudio = open("/dev/dvb/card0/audio0", O_RDWR);
 	if (ddvd_fdaudio == -1) {
-		perror("/dev/dvb/card0/audio0");
+		Perror("/dev/dvb/card0/audio0");
 		res = DDVD_BUSY;
 		goto err_open_fdaudio;
 	}
 
 	ddvd_ac3_fd = open("/dev/sound/dsp1", O_RDWR);
 	if (ddvd_ac3_fd == -1) {
-		perror("/dev/sound/dsp1");
+		Perror("/dev/sound/dsp1");
 		res = DDVD_BUSY;
 		goto err_open_ac3_fd;
 	}
 
 	if (ioctl(ddvd_fdvideo, VIDEO_SELECT_SOURCE, VIDEO_SOURCE_MEMORY) < 0)
-		perror("VIDEO_SELECT_SOURCE");
+		Perror("VIDEO_SELECT_SOURCE");
 	if (ioctl(ddvd_fdvideo, VIDEO_CLEAR_BUFFER) < 0)
-		perror("VIDEO_CLEAR_BUFFER");
+		Perror("VIDEO_CLEAR_BUFFER");
 	if (ioctl(ddvd_fdvideo, VIDEO_PLAY) < 0)
-		perror("VIDEO_PLAY");
+		Perror("VIDEO_PLAY");
 
 	if (ioctl(ddvd_fdaudio, AUDIO_SELECT_SOURCE, AUDIO_SOURCE_MEMORY) < 0)
-		perror("AUDIO_SELECT_SOURCE");
+		Perror("AUDIO_SELECT_SOURCE");
 	if (ioctl(ddvd_fdaudio, AUDIO_CLEAR_BUFFER) < 0)
-		perror("AUDIO_CLEAR_BUFFER");
+		Perror("AUDIO_CLEAR_BUFFER");
 	if (ioctl(ddvd_fdaudio, AUDIO_PLAY) < 0)
-		perror("AUDIO_PLAY");
+		Perror("AUDIO_PLAY");
 
 #elif CONFIG_API_VERSION == 3
 	ddvd_output_fd = ddvd_fdvideo = open("/dev/dvb/adapter0/video0", O_RDWR);
 	if (ddvd_fdvideo == -1) {
-		perror("/dev/dvb/adapter0/video0");
+		Perror("/dev/dvb/adapter0/video0");
 		res = DDVD_BUSY;
 		goto err_open_fdvideo;
 	}
 
 	ddvd_ac3_fd = ddvd_fdaudio = open("/dev/dvb/adapter0/audio0", O_RDWR);
 	if (ddvd_fdaudio == -1) {
-		perror("/dev/dvb/adapter0/audio0");
+		Perror("/dev/dvb/adapter0/audio0");
 		res = DDVD_BUSY;
 		goto err_open_ac3_fd;
 	}
 
 	if (ioctl(ddvd_fdvideo, VIDEO_SELECT_SOURCE, VIDEO_SOURCE_MEMORY) < 0)
-		perror("VIDEO_SELECT_SOURCE");
+		Perror("VIDEO_SELECT_SOURCE");
 	if (ioctl(ddvd_fdvideo, VIDEO_CLEAR_BUFFER) < 0)
-		perror("VIDEO_CLEAR_BUFFER");
+		Perror("VIDEO_CLEAR_BUFFER");
 	if (ioctl(ddvd_fdvideo, VIDEO_SET_STREAMTYPE, 0) < 0)	// set mpeg2
-		perror("VIDEO_SET_STREAMTYPE");
+		Perror("VIDEO_SET_STREAMTYPE");
 	if (ioctl(ddvd_fdvideo, VIDEO_PLAY) < 0)
-		perror("VIDEO_PLAY");
+		Perror("VIDEO_PLAY");
 
 	if (ioctl(ddvd_fdaudio, AUDIO_SELECT_SOURCE, AUDIO_SOURCE_MEMORY) < 0)
-		perror("AUDIO_SELECT_SOURCE");
+		Perror("AUDIO_SELECT_SOURCE");
 	if (ioctl(ddvd_fdaudio, AUDIO_CLEAR_BUFFER) < 0)
-		perror("AUDIO_CLEAR_BUFFER");
+		Perror("AUDIO_CLEAR_BUFFER");
 	if (ioctl(ddvd_fdaudio, AUDIO_PLAY) < 0)
-		perror("AUDIO_PLAY");
+		Perror("AUDIO_PLAY");
 #else
 #error please define CONFIG_API_VERSION to be 1 or 3
 #endif
@@ -834,7 +839,7 @@ enum ddvd_result ddvd_run(struct ddvd *playerconfig)
 	int ismute = 0;
 
 	if (ioctl(ddvd_fdaudio, AUDIO_SET_AV_SYNC, 1) < 0)
-		perror("AUDIO_SET_AV_SYNC");
+		Perror("AUDIO_SET_AV_SYNC");
 #if CONFIG_API_VERSION == 1	
 	// set video system
 	int pal_ntsc = playerconfig->tv_system;
@@ -846,7 +851,7 @@ enum ddvd_result ddvd_run(struct ddvd *playerconfig)
 	int saafd = open("/dev/dbox/saa0", O_RDWR);
 	if (saafd >= 0) {
 		if (ioctl(saafd, SAAIOSENC, &saa) < 0)
-			perror("SAAIOSENC");
+			Perror("SAAIOSENC");
 		close(saafd);
 	}
 #else
@@ -874,9 +879,9 @@ enum ddvd_result ddvd_run(struct ddvd *playerconfig)
 #endif
 	
 	/* open dvdnav handle */
-	printf("Opening DVD...%s\n", playerconfig->dvd_path);
+	Debug(1, "Opening DVD...%s\n", playerconfig->dvd_path);
 	if (dvdnav_open(&dvdnav, playerconfig->dvd_path) != DVDNAV_STATUS_OK) {
-		printf("Error on dvdnav_open\n");
+		Debug(1, "Error on dvdnav_open\n");
 		sprintf(osdtext, "Error: Cant open DVD Source: %s", playerconfig->dvd_path);
 		msg = DDVD_SHOWOSD_STRING;
 		safe_write(message_pipe, &msg, sizeof(int));
@@ -887,7 +892,7 @@ enum ddvd_result ddvd_run(struct ddvd *playerconfig)
 
 	/* set read ahead cache usage to no */
 	if (dvdnav_set_readahead_flag(dvdnav, 0) != DVDNAV_STATUS_OK) {
-		printf("Error on dvdnav_set_readahead_flag: %s\n", dvdnav_err_to_string(dvdnav));
+		Debug(1, "Error on dvdnav_set_readahead_flag: %s\n", dvdnav_err_to_string(dvdnav));
 		res = DDVD_FAIL_PREFS;
 		goto err_dvdnav;
 	}
@@ -896,7 +901,7 @@ enum ddvd_result ddvd_run(struct ddvd *playerconfig)
 	if (dvdnav_menu_language_select(dvdnav, playerconfig->language) != DVDNAV_STATUS_OK ||
 	    dvdnav_audio_language_select(dvdnav, playerconfig->language) != DVDNAV_STATUS_OK ||
 	    dvdnav_spu_language_select(dvdnav, playerconfig->language) != DVDNAV_STATUS_OK) {
-		printf("Error on setting languages: %s\n", dvdnav_err_to_string(dvdnav));
+		Debug(1, "Error on setting languages: %s\n", dvdnav_err_to_string(dvdnav));
 		res = DDVD_FAIL_PREFS;
 		goto err_dvdnav;
 	}
@@ -904,7 +909,7 @@ enum ddvd_result ddvd_run(struct ddvd *playerconfig)
 	/* set the PGC positioning flag to have position information relatively to the
 	 * whole feature instead of just relatively to the current chapter */
 	if (dvdnav_set_PGC_positioning_flag(dvdnav, 1) != DVDNAV_STATUS_OK) {
-		printf("Error on dvdnav_set_PGC_positioning_flag: %s\n", dvdnav_err_to_string(dvdnav));
+		Debug(1, "Error on dvdnav_set_PGC_positioning_flag: %s\n", dvdnav_err_to_string(dvdnav));
 		res = DDVD_FAIL_PREFS;
 		goto err_dvdnav;
 	}
@@ -989,7 +994,7 @@ enum ddvd_result ddvd_run(struct ddvd *playerconfig)
 
 			result = dvdnav_get_next_block(dvdnav, buf, &event, &len);
 			if (result == DVDNAV_STATUS_ERR) {
-				printf("Error getting next block: %s\n", dvdnav_err_to_string(dvdnav));
+				Debug(1, "Error getting next block: %s\n", dvdnav_err_to_string(dvdnav));
 				sprintf(osdtext, "Error: Getting next block: %s", dvdnav_err_to_string(dvdnav));
 				msg = DDVD_SHOWOSD_STRING;
 				safe_write(message_pipe, &msg, sizeof(int));
@@ -1072,7 +1077,7 @@ send_message:
 #else
 					safe_write(ddvd_output_fd, last_iframe, ddvd_last_iframe_len);
 #endif
-					//printf("Show iframe with size: %d\n",ddvd_last_iframe_len);
+					//Debug(1, "Show iframe with size: %d\n",ddvd_last_iframe_len);
 					ddvd_last_iframe_len = 0;
 				}
 
@@ -1083,7 +1088,7 @@ send_message:
 				if (ddvd_wait_timer_end <= ddvd_get_time()) {
 					ddvd_wait_timer_active = 0;
 					dvdnav_still_skip(dvdnav);
-					//printf("wait timer done\n");
+					//Debug(1, "wait timer done\n");
 				}
 			}
 			// SPU timer
@@ -1124,7 +1129,7 @@ send_message:
 							vpts |= (buf[14 + 11] >> 1) << 15;
 							vpts |= buf[14 + 12] << 7;
 							vpts |= (buf[14 + 13] >> 1);
-							//printf("VPTS? %X\n",(int)vpts);
+							//Debug(1, "VPTS? %X\n",(int)vpts);
 						}
 #if CONFIG_API_VERSION == 1
 						// Eliminate 00 00 01 B4 sequence error packet because it breaks the pallas mpeg decoder
@@ -1239,11 +1244,11 @@ send_message:
 					} else if ((buf[14 + 3]) == 0xC0 + audio_id)	// mpeg audio
 					{
 						if (audio_type != DDVD_MPEG) {
-							//printf("Switch to MPEG Audio\n");
+							//Debug(1, "Switch to MPEG Audio\n");
 							if (ioctl(ddvd_fdaudio, AUDIO_SET_AV_SYNC, 1) < 0)
-								perror("AUDIO_SET_AV_SYNC");
+								Perror("AUDIO_SET_AV_SYNC");
 							if (ioctl(ddvd_fdaudio, AUDIO_SET_BYPASS_MODE, 1) < 0)
-								perror("AUDIO_SET_BYPASS_MODE");
+								Perror("AUDIO_SET_BYPASS_MODE");
 							audio_type = DDVD_MPEG;
 						}
 
@@ -1254,7 +1259,7 @@ send_message:
 							apts |= (buf[14 + 11] >> 1) << 15;
 							apts |= buf[14 + 12] << 7;
 							apts |= (buf[14 + 13] >> 1);
-							//printf("APTS? %X\n",(int)apts);
+							//Debug(1, "APTS? %X\n",(int)apts);
 						}
 
 						safe_write(ddvd_ac3_fd, buf + 14, buf[19] + (buf[18] << 8) + 6);
@@ -1269,11 +1274,11 @@ send_message:
 						}
 
 						if (audio_type != DDVD_LPCM) {
-							//printf("Switch to LPCM Audio\n");
+							//Debug(1, "Switch to LPCM Audio\n");
 							if (ioctl(ddvd_fdaudio, AUDIO_SET_AV_SYNC, 1) < 0)
-								perror("AUDIO_SET_AV_SYNC");
+								Perror("AUDIO_SET_AV_SYNC");
 							if (ioctl(ddvd_fdaudio, AUDIO_SET_BYPASS_MODE, lpcm_mode) < 0)
-								perror("AUDIO_SET_BYPASS_MODE");
+								Perror("AUDIO_SET_BYPASS_MODE");
 							audio_type = DDVD_LPCM;
 							ddvd_lpcm_count = 0;
 						}
@@ -1284,7 +1289,7 @@ send_message:
 							apts |= (buf[14 + 11] >> 1) << 15;
 							apts |= buf[14 + 12] << 7;
 							apts |= (buf[14 + 13] >> 1);
-							//printf("APTS? %X\n",(int)apts);
+							//Debug(1, "APTS? %X\n",(int)apts);
 						}
 
 						if (lpcm_mode == 0) {
@@ -1335,15 +1340,15 @@ send_message:
 						}
 					} else if ((buf[14 + 3]) == 0xBD && (buf[14 + buf[14 + 8] + 9]) == 0x88 + audio_id) {	// dts audio
 						if (audio_type != DDVD_DTS) {
-							//printf("Switch to DTS Audio (thru)\n");
+							//Debug(1, "Switch to DTS Audio (thru)\n");
 							if (ioctl(ddvd_fdaudio, AUDIO_SET_AV_SYNC, 1) < 0)
-								perror("AUDIO_SET_AV_SYNC");
+								Perror("AUDIO_SET_AV_SYNC");
 #ifdef CONVERT_TO_DVB_COMPLIANT_DTS
 							if (ioctl(ddvd_fdaudio, AUDIO_SET_BYPASS_MODE, 2) < 0)	// DTS (dvb compliant)
 #else
 							if (ioctl(ddvd_fdaudio, AUDIO_SET_BYPASS_MODE, 5) < 0)	// DTS VOB
 #endif
-								perror("AUDIO_SET_BYPASS_MODE");
+								Perror("AUDIO_SET_BYPASS_MODE");
 							audio_type = DDVD_DTS;
 						}
 
@@ -1354,7 +1359,7 @@ send_message:
 							apts |= (buf[14 + 11] >> 1) << 15;
 							apts |= buf[14 + 12] << 7;
 							apts |= (buf[14 + 13] >> 1);
-							//printf("APTS? %X\n",(int)apts);
+							//Debug(1, "APTS? %X\n",(int)apts);
 						}
 
 #ifdef CONVERT_TO_DVB_COMPLIANT_DTS
@@ -1370,21 +1375,21 @@ send_message:
 #endif
 					} else if ((buf[14 + 3]) == 0xBD && (buf[14 + buf[14 + 8] + 9]) == 0x80 + audio_id) {	// ac3 audio
 						if (audio_type != DDVD_AC3) {
-							//printf("Switch to AC3 Audio\n");
+							//Debug(1, "Switch to AC3 Audio\n");
 							if (ac3thru || !have_liba52) {	// !have_liba52 and !ac3thru should never happen, but who knows ;)
 								if (ioctl(ddvd_fdaudio, AUDIO_SET_AV_SYNC, 1) < 0)
-									perror("AUDIO_SET_AV_SYNC");
+									Perror("AUDIO_SET_AV_SYNC");
 #ifdef CONVERT_TO_DVB_COMPLIANT_AC3
 								if (ioctl(ddvd_fdaudio, AUDIO_SET_BYPASS_MODE, 0) < 0)	// AC3 (dvb compliant)
 #else
 								if (ioctl(ddvd_fdaudio, AUDIO_SET_BYPASS_MODE, 3) < 0)	// AC3 VOB
 #endif
-									perror("AUDIO_SET_BYPASS_MODE");
+									Perror("AUDIO_SET_BYPASS_MODE");
 							} else {
 								if (ioctl(ddvd_fdaudio, AUDIO_SET_AV_SYNC, 1) < 0)
-									perror("AUDIO_SET_AV_SYNC");
+									Perror("AUDIO_SET_AV_SYNC");
 								if (ioctl(ddvd_fdaudio, AUDIO_SET_BYPASS_MODE, 1) < 0)
-									perror("AUDIO_SET_BYPASS_MODE");
+									Perror("AUDIO_SET_BYPASS_MODE");
 							}
 							audio_type = DDVD_AC3;
 						}
@@ -1396,7 +1401,7 @@ send_message:
 							apts |= (buf[14 + 11] >> 1) << 15;
 							apts |= buf[14 + 12] << 7;
 							apts |= (buf[14 + 13] >> 1);
-							//printf("APTS? %X\n",(int)apts);
+							//Debug(1, "APTS? %X\n",(int)apts);
 						}
 
 						if (ac3thru || !have_liba52) {	// !have_liba52 and !ac3thru should never happen, but who knows ;)
@@ -1470,14 +1475,14 @@ send_message:
 #if CONFIG_API_VERSION == 1
 							spts >>= 1;	// need a corrected "spts" because vulcan/pallas will give us a 32bit pts instead of 33bit
 #endif
-							//printf("SPTS? %X\n",(int)spts);
+							//Debug(1, "SPTS? %X\n",(int)spts);
 						}
 
 						if (ddvd_spu_ptr >= (spu_buffer[0] << 8 | spu_buffer[1]))	// SPU packet complete ?
 						{
 							if (ddvd_spu_backnr == NUM_SPU_BACKBUFFER)	// backbuffer already full ?
 							{
-								printf("dropped SPU frame\n");
+								Debug(1, "dropped SPU frame\n");
 								int tmplen = (spu_backbuffer[0] << 8 | spu_backbuffer[1]);
 								memcpy(spu_backbuffer, spu_backbuffer + tmplen, ddvd_spu_backptr - tmplen);	// delete oldest SPU packet
 								int i;
@@ -1546,11 +1551,11 @@ send_message:
 					//	int y = buf[i + 1];
 					//	signed char cr = buf[i + 2];	//v
 					//	signed char cb = buf[i + 3];	//u
-					//	printf("%d %d %d ->", y, cr, cb);
+					//	Debug(1, "%d %d %d ->", y, cr, cb);
 					//	y = pal[i + 1];
 					//	cr = pal[i + 2];	//v
 					//	cb = pal[i + 3];	//u
-					//	printf(" %d %d %d\n", y, cr, cb);
+					//	Debug(1, " %d %d %d\n", y, cr, cb);
 					//	i += 4;
 					//}
 					//i = 0;
@@ -1619,7 +1624,7 @@ send_message:
 				safe_write(message_pipe, &msg, sizeof(int));
 				safe_write(message_pipe, &report_spu, sizeof(int));
 				safe_write(message_pipe, &spu_lang, sizeof(uint16_t));
-				//printf("SPU Stream change: w %X l: %X p: %X active: %X\n",ev->physical_wide,ev->physical_letterbox,ev->physical_pan_scan,spu_active_id);
+				//Debug(1, "SPU Stream change: w %X l: %X p: %X active: %X\n",ev->physical_wide,ev->physical_letterbox,ev->physical_pan_scan,spu_active_id);
 				break;
 
 			case DVDNAV_AUDIO_STREAM_CHANGE:
@@ -1645,7 +1650,7 @@ send_message:
 					msg = DDVD_SCREEN_UPDATE;	// wipe old highlight
 					safe_write(message_pipe, &msg, sizeof(int));
 					safe_write(message_pipe, &blit_area, sizeof(struct ddvd_resize_return));
-					//printf("destination area to wipe: %d %d %d %d\n",blit_area.x_start,blit_area.x_end,blit_area.y_start,blit_area.y_end);
+					//Debug(1, "destination area to wipe: %d %d %d %d\n",blit_area.x_start,blit_area.x_end,blit_area.y_start,blit_area.y_end);
 					
 					//struct ddvd_resize_return blit_area;
 					blit_area.x_start = blit_area.x_end = blit_area.y_start = blit_area.y_end = 0;
@@ -1758,7 +1763,7 @@ send_message:
 
 						if ((x_offset != 0 || y_offset != 0 || y_source != ddvd_screeninfo_yres || ddvd_screeninfo_xres != 720) && !playerconfig->canscale)
 						{
-//							printf("resizing\n");
+//							Debug(1, "resizing\n");
 							resized = 1;
 							blit_area = ddvd_resize_pixmap(ddvd_lbb2, 720, y_source, ddvd_screeninfo_xres, ddvd_screeninfo_yres, x_offset, y_offset, blit_area.x_start, blit_area.x_end, blit_area.y_start, blit_area.y_end, ddvd_screeninfo_bypp); // resize
 						}
@@ -1776,8 +1781,8 @@ send_message:
 							blit_area.y_offset = y_offset;
 						}
 						memcpy(p_lfb, ddvd_lbb2, ddvd_screeninfo_xres * ddvd_screeninfo_yres * ddvd_screeninfo_bypp); //copy backbuffer into screen
-						//printf("needed time for resizing: %d ms\n",(int)(ddvd_get_time()-start));
-						//printf("destination area to blit: %d %d %d %d\n",blit_area.x_start,blit_area.x_end,blit_area.y_start,blit_area.y_end);
+						//Debug(1, "needed time for resizing: %d ms\n",(int)(ddvd_get_time()-start));
+						//Debug(1, "destination area to blit: %d %d %d %d\n",blit_area.x_start,blit_area.x_end,blit_area.y_start,blit_area.y_end);
 						msg = DDVD_SCREEN_UPDATE;
 						safe_write(message_pipe, &msg, sizeof(int));
 						safe_write(message_pipe, &blit_area, sizeof(struct ddvd_resize_return));
@@ -1785,7 +1790,7 @@ send_message:
 					}
 				} else {
 					ddvd_clear_buttons = 0;
-					//printf("clear buttons\n");
+					//Debug(1, "clear buttons\n");
 				}
 				break;
 
@@ -1812,7 +1817,7 @@ send_message:
 					dvd_aspect = dvdnav_get_video_aspect(dvdnav);
 					dvd_scale_perm = dvdnav_get_video_scale_permission(dvdnav);
 					tv_scale = ddvd_check_aspect(dvd_aspect, dvd_scale_perm, tv_aspect, tv_mode);
-					//printf("DVD Aspect: %d TV Aspect: %d Scale: %d Allowed: %d\n",dvd_aspect,tv_aspect,tv_scale,dvd_scale_perm);
+					//Debug(1, "DVD Aspect: %d TV Aspect: %d Scale: %d Allowed: %d\n",dvd_aspect,tv_aspect,tv_scale,dvd_scale_perm);
 					
 					// resuming a dvd ?
 					if (playerconfig->should_resume && first_vts_change) {
@@ -1832,7 +1837,7 @@ send_message:
 							playerconfig->resume_audio_lock = 0;
 							playerconfig->resume_spu_id = 0;
 							playerconfig->resume_spu_lock = 0;							
-							perror("DVD resuming failed");
+							Perror("DVD resuming failed");
 						}
 						
 						
@@ -1856,7 +1861,7 @@ send_message:
 						playerconfig->should_resume = 0;
 						if (dvdnav_sector_search(dvdnav, playerconfig->resume_block, SEEK_SET) != DVDNAV_STATUS_OK)
 						{
-							perror("DVD resuming failed");
+							Perror("DVD resuming failed");
 						} else {
 							audio_id = playerconfig->resume_audio_id;
 							audio_lock = 1;//playerconfig->resume_audio_lock;
@@ -1927,7 +1932,7 @@ send_message:
 
 			case DVDNAV_STOP:
 				/* Playback should end here. */
-				printf("DVDNAV_STOP\n");
+				Debug(1, "DVDNAV_STOP\n");
 				playerconfig->resume_title = 0;
 				playerconfig->resume_chapter = 0;
 				playerconfig->resume_block = 0;
@@ -1939,7 +1944,7 @@ send_message:
 				break;
 
 			default:
-				printf("Unknown event (%i)\n", event);
+				Debug(1, "Unknown event (%i)\n", event);
 				finished = 1;
 				break;
 			}
@@ -1948,15 +1953,15 @@ send_message:
 #if CONFIG_API_VERSION == 1
 		unsigned int tpts;
 		if (ioctl(ddvd_output_fd, VIDEO_GET_PTS, &tpts) < 0)
-			perror("VIDEO_GET_PTS");
+			Perror("VIDEO_GET_PTS");
 		pts = (unsigned long long)tpts;
 		signed long long diff = spu_backpts[0] - pts;
 		if (ddvd_spu_backnr > 0 && diff <= 0xFF)	// we only have a 32bit pts on vulcan/pallas (instead of 33bit) so we need some tolerance on syncing SPU for menus
 													// so on non animated menus the buttons will be displayed to soon, but we we have to accept it
 #else
 		if (ioctl(ddvd_fdvideo, VIDEO_GET_PTS, &pts) < 0)
-			perror("VIDEO_GET_PTS");
-//		printf("pts %d, dvd_spu_backnr = %d, spu_backpts = %d\n", 
+			Perror("VIDEO_GET_PTS");
+//		Debug(1, "pts %d, dvd_spu_backnr = %d, spu_backpts = %d\n", 
 //			(int)pts, (int)ddvd_spu_backnr, (int) spu_backpts[0]);
 		struct video_event event;
 		if (!ioctl(ddvd_fdvideo, VIDEO_GET_EVENT, &event))
@@ -2006,11 +2011,11 @@ send_message:
 					/* the last subtitle's bbox is still in last_spu_return, so this subtitle will enlarge this bbox. */
 			
 			memset(ddvd_lbb, 0, 720 * 576);	//clear backbuffer .. 
-//			printf("[SPU] previous bbox: %d %d %d %d\n",
+//			Debug(1, "[SPU] previous bbox: %d %d %d %d\n",
 //				last_spu_return.x_start, last_spu_return.x_end, 
 //				last_spu_return.y_start, last_spu_return.y_end);
 			last_spu_return = merge(last_spu_return, ddvd_spu_decode_data(spu_backbuffer, tmplen));	// decode
-//			printf("[SPU] merged   bbox: %d %d %d %d\n",
+//			Debug(1, "[SPU] merged   bbox: %d %d %d %d\n",
 //				last_spu_return.x_start, last_spu_return.x_end, 
 //				last_spu_return.y_start, last_spu_return.y_end);
 			ddvd_display_time = last_spu_return.display_time;
@@ -2039,7 +2044,7 @@ send_message:
 			ddvd_spu_backnr--;
 			ddvd_spu_backptr -= tmplen;
 			
-//			printf("[SPU] backnr = %d, backptr = %d\n", ddvd_spu_backnr, ddvd_spu_backptr);
+//			Debug(1, "[SPU] backnr = %d, backptr = %d\n", ddvd_spu_backnr, ddvd_spu_backptr);
 
 			// set timer
 			if (ddvd_display_time > 0) {
@@ -2161,7 +2166,7 @@ send_message:
 					break;
 				case DDVD_KEY_EXIT:	//Exit
 					{
-						printf("DDVD_KEY_EXIT (menu)\n");
+						Debug(1, "DDVD_KEY_EXIT (menu)\n");
 						playerconfig->resume_title = 0;
 						playerconfig->resume_chapter = 0;
 						playerconfig->resume_block = 0;
@@ -2250,9 +2255,9 @@ send_message:
 						if (ddvd_playmode == PLAY) {
 							ddvd_playmode = PAUSE;
 							if (ioctl(ddvd_fdaudio, AUDIO_PAUSE) < 0)
-								perror("AUDIO_PAUSE");
+								Perror("AUDIO_PAUSE");
 							if (ioctl(ddvd_fdvideo, VIDEO_FREEZE) < 0)
-								perror("VIDEO_FREEZE");
+								Perror("VIDEO_FREEZE");
 							msg = DDVD_SHOWOSD_STATE_PAUSE;
 							safe_write(message_pipe, &msg, sizeof(int));
 							break;
@@ -2270,13 +2275,13 @@ key_play:
 #endif
 							if (ddvd_trickmode && !ismute)
 								if (ioctl(ddvd_fdaudio, AUDIO_SET_MUTE, 0) < 0)
-									perror("AUDIO_SET_MUTE");
+									Perror("AUDIO_SET_MUTE");
 							ddvd_trickmode = TOFF;
 							if (ddvd_playmode == PLAY) {
 								if (ioctl(ddvd_fdaudio, AUDIO_CONTINUE) < 0)
-									perror("AUDIO_CONTINUE");
+									Perror("AUDIO_CONTINUE");
 								if (ioctl(ddvd_fdvideo, VIDEO_CONTINUE) < 0)
-									perror("VIDEO_CONTINUE");
+									Perror("VIDEO_CONTINUE");
 								msg = DDVD_SHOWOSD_STATE_PLAY;
 								safe_write(message_pipe, &msg, sizeof(int));
 							}
@@ -2294,7 +2299,7 @@ key_play:
 					break;
 				case DDVD_KEY_EXIT:	//Exit
 					{
-						printf("DDVD_KEY_EXIT (menu)\n");
+						Debug(1, "DDVD_KEY_EXIT (menu)\n");
 						int resume_title, resume_chapter; //safe resume info
 						uint32_t resume_block, total_block;
 						if (dvdnav_current_title_info(dvdnav, &resume_title, &resume_chapter) && (0 != resume_title)) {
@@ -2306,8 +2311,8 @@ key_play:
 								playerconfig->resume_audio_lock = audio_lock;
 								playerconfig->resume_spu_id = spu_active_id;
 								playerconfig->resume_spu_lock = spu_lock;
-							} else perror("error getting resume position");
-						} perror("error getting resume position");					
+							} else Perror("error getting resume position");
+						} Perror("error getting resume position");					
 						finished = 1;
 					}
 					break;						
@@ -2316,7 +2321,7 @@ key_play:
 					{
 						if (ddvd_trickmode == TOFF) {
 							if (ioctl(ddvd_fdaudio, AUDIO_SET_MUTE, 1) < 0)
-								perror("AUDIO_SET_MUTE");
+								Perror("AUDIO_SET_MUTE");
 							ddvd_trickspeed = 2;
 							ddvd_trickmode = (rccode == DDVD_KEY_FBWD ? FASTBW : FASTFW);
 						} else if (ddvd_trickmode == (rccode == DDVD_KEY_FBWD ? FASTFW : FASTBW)) {
@@ -2347,7 +2352,7 @@ key_play:
 					{
 						int set_audio_id;
 						ddvd_readpipe(key_pipe, &set_audio_id, sizeof(int), 1);
-						printf("DDVD_SET_AUDIO %i (prev %i)\n", set_audio_id, audio_id);
+						Debug(1, "DDVD_SET_AUDIO %i (prev %i)\n", set_audio_id, audio_id);
 						if (set_audio_id < MAX_AUDIO && playerconfig->audio_format[audio_id] != -1)
 							audio_id = set_audio_id;
 						report_audio_info = 1;
@@ -2379,7 +2384,7 @@ key_play:
 						else if (rccode == DDVD_SET_SUBTITLE)
 						{
 							ddvd_readpipe(key_pipe, &spu_id_logical, sizeof(int), 1);
-							printf("DDVD_SET_SUBTITLE %i (prev %i)\n", spu_id_logical, spu_active_id);
+							Debug(1, "DDVD_SET_SUBTITLE %i (prev %i)\n", spu_id_logical, spu_active_id);
 							if (spu_id_logical < MAX_SPU && playerconfig->spu_map[spu_id_logical] > -1)
 								spu_active_id = dvdnav_get_spu_logical_stream(dvdnav, spu_id_logical);
 						}
@@ -2434,14 +2439,14 @@ key_play:
 						if (ddvd_trickmode == TOFF) {
 							uint32_t pos, len;
 							dvdnav_get_position(dvdnav, &pos, &len);
-							printf("DDVD_SKIP pos=%u len=%u \n", pos, len);
+							Debug(1, "DDVD_SKIP pos=%u len=%u \n", pos, len);
 							//90000 = 1 Sek.
 							if (!len)
 								len = 1;
 							long long int posneu = ((pos * ddvd_lastCellEventInfo.pgc_length) / len) + (90000 * skip);
-							printf("DDVD_SKIP posneu1=%lld\n", posneu);
+							Debug(1, "DDVD_SKIP posneu1=%lld\n", posneu);
 							long long int posneu2 = posneu <= 0 ? 0 : (posneu * len) / ddvd_lastCellEventInfo.pgc_length;
-							printf("DDVD_SKIP posneu2=%lld\n", posneu2);
+							Debug(1, "DDVD_SKIP posneu2=%lld\n", posneu2);
 							if (len && posneu2 && posneu2 >= len)	// reached end of movie
 							{
 								posneu2 = len - 250;
@@ -2458,7 +2463,7 @@ key_play:
 						int title, totalTitles;
 						ddvd_readpipe(key_pipe, &title, sizeof(int), 1);
 						dvdnav_get_number_of_titles(dvdnav, &totalTitles);
-						printf("DDVD_SET_TITLE %d/%d\n", title, totalTitles);
+						Debug(1, "DDVD_SET_TITLE %d/%d\n", title, totalTitles);
 						if (title <= totalTitles) {
 							dvdnav_part_play(dvdnav, title, 0);
 							ddvd_play_empty(TRUE);
@@ -2472,7 +2477,7 @@ key_play:
 						ddvd_readpipe(key_pipe, &chapter, sizeof(int), 1);
 						dvdnav_current_title_info(dvdnav, &titleNo, &chapterNo);
 						dvdnav_get_number_of_parts(dvdnav, titleNo, &totalChapters);
-						printf("DDVD_SET_CHAPTER %d/%d in title %d\n", chapter, totalChapters, titleNo);
+						Debug(1, "DDVD_SET_CHAPTER %d/%d in title %d\n", chapter, totalChapters, titleNo);
 						if (chapter <= totalChapters) {
 							dvdnav_part_play(dvdnav, titleNo, chapter);
 							ddvd_play_empty(TRUE);
@@ -2516,7 +2521,7 @@ key_play:
 			int resized = 0;
 			if ((x_offset != 0 || y_offset != 0 || y_source != ddvd_screeninfo_yres || ddvd_screeninfo_xres != 720) && !playerconfig->canscale)
 			{
-//				printf("resizing.. (x=%d y=%d %d %d, %d)\n", x_offset, y_offset, y_source, ddvd_screeninfo_yres, ddvd_screeninfo_xres );
+//				Debug(1, "resizing.. (x=%d y=%d %d %d, %d)\n", x_offset, y_offset, y_source, ddvd_screeninfo_yres, ddvd_screeninfo_xres );
 				blit_area = ddvd_resize_pixmap_spu(ddvd_lbb2, 720, y_source, ddvd_screeninfo_xres, ddvd_screeninfo_yres, x_offset, y_offset, blit_area.x_start, blit_area.x_end, blit_area.y_start, blit_area.y_end, ddvd_screeninfo_bypp); // resize
 				resized = 1;
 			}
@@ -2536,8 +2541,8 @@ key_play:
 				blit_area.height = ddvd_screeninfo_yres;
 			}
 
-			//printf("needed time for resizing: %d ms\n",(int)(ddvd_get_time()-start));
-			//printf("destination area to blit: %d %d %d %d Time: %d\n",blit_area.x_start,blit_area.x_end,blit_area.y_start,blit_area.y_end,last_spu_return.display_time);
+			//Debug(1, "needed time for resizing: %d ms\n",(int)(ddvd_get_time()-start));
+			//Debug(1, "destination area to blit: %d %d %d %d Time: %d\n",blit_area.x_start,blit_area.x_end,blit_area.y_start,blit_area.y_end,last_spu_return.display_time);
 			int msg_old = msg;	// save and restore msg it may not be empty
 			msg = DDVD_SCREEN_UPDATE;
 			safe_write(message_pipe, &msg, sizeof(int));
@@ -2570,19 +2575,19 @@ key_play:
 err_dvdnav:
 	/* destroy dvdnav handle */
 	if (dvdnav_close(dvdnav) != DVDNAV_STATUS_OK)
-		printf("Error on dvdnav_close: %s\n", dvdnav_err_to_string(dvdnav));
+		Debug(1, "Error on dvdnav_close: %s\n", dvdnav_err_to_string(dvdnav));
 
 err_dvdnav_open:
 	if (ioctl(ddvd_fdvideo, VIDEO_CLEAR_BUFFER) < 0)
-		perror("VIDEO_CLEAR_BUFFER");
+		Perror("VIDEO_CLEAR_BUFFER");
 	if (ioctl(ddvd_fdvideo, VIDEO_SELECT_SOURCE, VIDEO_SOURCE_DEMUX) < 0)
-		perror("VIDEO_SELECT_SOURCE");
+		Perror("VIDEO_SELECT_SOURCE");
 	if (ioctl(ddvd_fdaudio, AUDIO_CLEAR_BUFFER) < 0)
-		perror("AUDIO_CLEAR_BUFFER");
+		Perror("AUDIO_CLEAR_BUFFER");
 	if (ioctl(ddvd_fdaudio, AUDIO_SELECT_SOURCE, AUDIO_SOURCE_DEMUX) < 0)
-		perror("AUDIO_SELECT_SOURCE");
+		Perror("AUDIO_SELECT_SOURCE");
 	if (ioctl(ddvd_fdaudio, AUDIO_SET_AV_SYNC, 1) < 0)	// restore AudioDecoder State
-		perror("AUDIO_SET_AV_SYNC");
+		Perror("AUDIO_SET_AV_SYNC");
 	close(ddvd_ac3_fd);
 err_open_ac3_fd:
 	close(ddvd_fdaudio);
@@ -2651,7 +2656,7 @@ static int ddvd_readpipe(int pipefd, void *dest, size_t bytes, int blocked_read)
 			}
 			/* else if (errno == ????) // hier sollte evtl noch geschaut werden welcher error code kommt wenn die pipe geschlossen wurde... 
 			   break; */
-			printf("unhandled read error %d(%m)\n", errno);
+			Debug(1, "unhandled read error %d(%m)\n", errno);
 		}
 
 		bytes_completed += rd;
@@ -2763,17 +2768,17 @@ static void ddvd_play_empty(int device_clear)
 static void ddvd_device_clear(void)
 {
 	if (ioctl(ddvd_fdaudio, AUDIO_CLEAR_BUFFER) < 0)
-		perror("AUDIO_CLEAR_BUFFER");
+		Perror("AUDIO_CLEAR_BUFFER");
 	if (ioctl(ddvd_fdaudio, AUDIO_PLAY) < 0)
-		perror("AUDIO_PLAY");
+		Perror("AUDIO_PLAY");
 
 	if (ioctl(ddvd_fdvideo, VIDEO_CLEAR_BUFFER) < 0)
-		perror("VIDEO_CLEAR_BUFFER");
+		Perror("VIDEO_CLEAR_BUFFER");
 	if (ioctl(ddvd_fdvideo, VIDEO_PLAY) < 0)
-		perror("VIDEO_PLAY");
+		Perror("VIDEO_PLAY");
 
 	if (ioctl(ddvd_fdaudio, AUDIO_SET_AV_SYNC, 1) < 0)
-		perror("AUDIO_SET_AV_SYNC");
+		Perror("AUDIO_SET_AV_SYNC");
 }
 
 // SPU Decoder
@@ -2790,7 +2795,7 @@ static struct ddvd_spu_return ddvd_spu_decode_data(const uint8_t * buffer, int l
 	datasize = (buffer[2] << 8 | buffer[3]);
 	controlsize = (buffer[datasize + 2] << 8 | buffer[datasize + 3]);
 
-	//printf("SPU_dec: Size: %X Datasize: %X Controlsize: %X\n",size,datasize,controlsize);
+	//Debug(1, "SPU_dec: Size: %X Datasize: %X Controlsize: %X\n",size,datasize,controlsize);
 	// parse header
 	int i = datasize + 4;
 
@@ -2811,7 +2816,7 @@ static struct ddvd_spu_return ddvd_spu_decode_data(const uint8_t * buffer, int l
 		case 0x03:	/* palette */
 			{
 				ddvd_spudec_clut_t *clut = (ddvd_spudec_clut_t *) (buffer + i + 1);
-				//printf("update palette %d %d %d %d\n", clut->entry0, clut->entry1, clut->entry2, clut->entry3);
+				//Debug(1, "update palette %d %d %d %d\n", clut->entry0, clut->entry1, clut->entry2, clut->entry3);
 
 				ddvd_bl[3 + 252] = ddvd_bl[clut->entry0];
 				ddvd_gn[3 + 252] = ddvd_gn[clut->entry0];
@@ -2836,7 +2841,7 @@ static struct ddvd_spu_return ddvd_spu_decode_data(const uint8_t * buffer, int l
 		case 0x04:	/* transparency palette */
 			{
 				ddvd_spudec_clut_t *clut = (ddvd_spudec_clut_t *) (buffer + i + 1);
-				//printf("update transp palette %d %d %d %d\n", clut->entry0, clut->entry1, clut->entry2, clut->entry3);
+				//Debug(1, "update transp palette %d %d %d %d\n", clut->entry0, clut->entry1, clut->entry2, clut->entry3);
 
 				ddvd_tr[0 + 252] = (0xF - clut->entry3) * 0x1111;
 				ddvd_tr[1 + 252] = (0xF - clut->entry2) * 0x1111;
@@ -2848,23 +2853,23 @@ static struct ddvd_spu_return ddvd_spu_decode_data(const uint8_t * buffer, int l
 			}
 			break;
 		case 0x05:	/* image coordinates */
-			//printf("image coords\n");
+			//Debug(1, "image coords\n");
 			xspu = x1spu = (((unsigned int)buffer[i + 1]) << 4) + (buffer[i + 2] >> 4);
 			yspu = y1spu = (((unsigned int)buffer[i + 4]) << 4) + (buffer[i + 5] >> 4);
 			x2spu = (((buffer[i + 2] & 0x0f) << 8) + buffer[i + 3]);
 			y2spu = (((buffer[i + 5] & 0x0f) << 8) + buffer[i + 6]);
-			//printf("%d %d %d %d\n", xspu, yspu, x2spu, y2spu);
+			//Debug(1, "%d %d %d %d\n", xspu, yspu, x2spu, y2spu);
 			i += 7;
 			break;
 		case 0x06:	/* image 1 / image 2 offsets */
-			//printf("image offsets\n");
+			//Debug(1, "image offsets\n");
 			offset[0] = (((unsigned int)buffer[i + 1]) << 8) + buffer[i + 2];
 			offset[1] = (((unsigned int)buffer[i + 3]) << 8) + buffer[i + 4];
-			//printf("%d %d\n", offset[0], offset[1]);
+			//Debug(1, "%d %d\n", offset[0], offset[1]);
 			i += 5;
 			break;
 		case 0x07:	/* change color for a special area so overlays with more than 4 colors are possible - NOT IMPLEMENTET YET */
-			//printf("change color packet\n");
+			//Debug(1, "change color packet\n");
 			param_len = (buffer[i + 1] << 8 | buffer[i + 2]);
 			i += param_len + 1;
 			break;
@@ -2878,11 +2883,11 @@ static struct ddvd_spu_return ddvd_spu_decode_data(const uint8_t * buffer, int l
 	if (i + 6 <= size) {
 		if (buffer[i + 5] == 0x02 && buffer[i + 6] == 0xFF) {
 			display_time = ((buffer[i + 1] << 8) + buffer[i + 2]);
-			//printf("Display Time: %d\n",ddvd_display_time);
+			//Debug(1, "Display Time: %d\n",ddvd_display_time);
 		}
 	}
-	//printf("SPU_dec: Image coords x1: %d y1: %d x2: %d y2: %d\n",x1spu,y1spu,x2spu,y2spu);
-	//printf("Offset[0]: %X Offset[1]: %X\n",offset[0],offset[1]);
+	//Debug(1, "SPU_dec: Image coords x1: %d y1: %d x2: %d y2: %d\n",x1spu,y1spu,x2spu,y2spu);
+	//Debug(1, "Offset[0]: %X Offset[1]: %X\n",offset[0],offset[1]);
 
 	// parse picture
 

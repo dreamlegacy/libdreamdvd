@@ -102,6 +102,10 @@
 #define MAX_AUDIO       8
 #define MAX_SPU         32
 
+#define NO_AV_FLUSH             0
+#define AV_FLUSH                1
+#define AV_FLUSH_SKIP_WAIT      2
+
 typedef struct ddvd_spudec_clut_struct {
 #if BYTE_ORDER == BIG_ENDIAN
 	uint8_t	entry0	: 4;
@@ -187,6 +191,22 @@ struct ddvd_progressive_evt {
 	int progressive;
 };
 
+/* struct to maintain subtitle stream info */
+struct spu_map_t {
+	int8_t logical_id   :  8;
+	int8_t stream_id    :  8;
+	int16_t lang        : 16;
+};
+
+/* struct to maintain audio stream info */
+struct audio_map_t {
+	int8_t logical_id   :  8;
+	int8_t stream_id    :  8;
+	int8_t format       :  8;
+	int8_t verified     :  8;
+	int16_t lang        : 16;
+};
+
 
 /* struct for ddvd nav handle*/
 struct ddvd {
@@ -236,8 +256,8 @@ struct ddvd {
 	int angle_current;
 	int angle_num;
 
-	int audio_format[MAX_AUDIO];
-	int spu_map[MAX_SPU];
+	struct audio_map_t audio_map[MAX_AUDIO];
+	struct spu_map_t spu_map[MAX_SPU];
 };
 
 /* internal functions */

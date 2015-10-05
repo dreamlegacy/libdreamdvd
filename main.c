@@ -1272,16 +1272,21 @@ send_message:
 							int z=0;
 							for (z=0; z<2040; z++)
 							{
-								if (buf[z] == 0x0 && buf[z+1] == 0x0 && buf[z+2] ==0x01 && buf[z+3] == 0xB5 && (buf[z+4] == 0x22 || buf[z+4] == 0x23))
+								if (buf[z] == 0x0 && buf[z+1] == 0x0 && buf[z+2] == 0x01 && buf[z+3] == 0xB5 && buf[z+4] == 0x22)
 								{
-									//    \/ @@@go: Copy and paste Fehler?
-									buf[z+5]=0x22;
 									buf[z+5]=0x0B;
-									//    /\ @@@go: Copy and paste Fehler?
 									buf[z+6]=0x42;
 									buf[z+7]=0x12;
 									buf[z+8]=0x00;
 								}
+								else if (buf[z] == 0x0 && buf[z+1] == 0x0 && buf[z+2] == 0x01 && buf[z+3] == 0xB5 && buf[z+4] == 0x23)
+								{
+									buf[z+8]=0x0B;
+									buf[z+9]=0x42;
+									buf[z+10]=0x12;
+									buf[z+11]=0x00;
+								}
+
 							}
 							if (buf[33] == 0 && buf[33 + 1] == 0 && buf[33 + 2] == 1 && buf[33 + 3] == 0xB3) {
 								buf[33 + 7] = (buf[33 + 7] & 0xF) + 0x30;

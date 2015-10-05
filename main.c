@@ -30,7 +30,7 @@
 #include "a52dec.h"
 
 #define Debug(level, str, ...) (DebugLevel > level ? printf("LIBDVD: %07.3f: " str, (float) ddvd_get_time() / 1000.0, ##__VA_ARGS__) : 0)
-#define Perror(msg)            Debug(-1, "%s: %m", msg)
+#define Perror(msg)            Debug(-1, "%s: %m\n", msg)
 
 int DebugLevel = 1;
 

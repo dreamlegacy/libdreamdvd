@@ -604,6 +604,10 @@ static int readApiFrameRate(int fd, int *framerate)
 // the main player loop
 enum ddvd_result ddvd_run(struct ddvd *playerconfig)
 {
+	char * DL = getenv("LIBDVD_DEBUG");
+	if (DL)
+		DebugLevel = atoi(DL);
+
 	if (playerconfig->lfb == NULL) {
 		Debug(1, "Frame/backbuffer not given to libdreamdvd. Will not start the player !\n");
 		return DDVD_INVAL;

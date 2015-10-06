@@ -1003,9 +1003,11 @@ enum ddvd_result ddvd_run(struct ddvd *playerconfig)
 			// trickmode
 			if (ddvd_trickmode) {
 				if (ddvd_trick_timer_end <= ddvd_get_time()) {
+					uint32_t pos, len;
+					dvdnav_get_position(dvdnav, &pos, &len);
+					if (!len)
+						len=1;
 					if (ddvd_trickmode == FASTBW) {	//jump back ?
-						uint32_t pos, len;
-						dvdnav_get_position(dvdnav, &pos, &len);
 						//90000 = 1 Sek. -> 45000 = 0.5 Sek. -> Speed Faktor=2
 						int64_t posneu = ((pos * ddvd_lastCellEventInfo.pgc_length) / len) - (45000 * 2 * ddvd_trickspeed);
 						int64_t posneu2 = posneu <= 0 ? 0 : (posneu * len) / ddvd_lastCellEventInfo.pgc_length;
@@ -1017,8 +1019,6 @@ enum ddvd_result ddvd_run(struct ddvd *playerconfig)
 							msg = DDVD_SHOWOSD_STATE_FBWD;
 						}
 					} else if (ddvd_trickmode == FASTFW) {	//jump forward ?
-						uint32_t pos, len;
-						dvdnav_get_position(dvdnav, &pos, &len);
 						//90000 = 1 Sek. -> 22500 = 0.25 Sek. -> Speed Faktor=2
 						int64_t posneu = ((pos * ddvd_lastCellEventInfo.pgc_length) / len) + (22500 * 2 * ddvd_trickspeed);
 						int64_t posneu2 = (posneu * len) / ddvd_lastCellEventInfo.pgc_length;

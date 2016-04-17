@@ -32,6 +32,13 @@
 #define Debug(level, str, ...) (DebugLevel > level ? printf("LIBDVD: %07.3f: " str, (float) ddvd_get_time() / 1000.0, ##__VA_ARGS__) : 0)
 #define Perror(msg)            Debug(-1, "%s: %m\n", msg)
 
+typedef enum
+{
+	SUB_FILTER_SHOW_FORCED_ONLY =  1,
+	SUB_FILTER_SHOW_ALL         =  2
+} SubFilter;
+
+
 int DebugLevel = 1;
 
 /*
@@ -243,10 +250,12 @@ void ddvd_set_video_ex(struct ddvd *pconfig, int aspect, int tv_mode, int tv_mod
 }
 
 // set subtitle stream id
-void ddvd_set_spu(struct ddvd *pconfig, int spu_id)
+void ddvd_set_spu(struct ddvd *pconfig, int spu_id, int spu_filter)
 {
+	Debug(2, "ddvd_set_spu to id: %d filter: %d\n", spu_id, spu_filter);
 	ddvd_send_key(pconfig, DDVD_SET_SUBTITLE);
 	ddvd_send_key(pconfig, spu_id);
+	pconfig->spu_map[spu_id].filter = spu_filter;
 }
 
 // set audio stream id
@@ -486,14 +495,22 @@ void ddvd_get_spu_count(struct ddvd *pconfig, void *count)
 }
 
 // get language details for given subtitle track id
-void ddvd_get_spu_byid(struct ddvd *pconfig, int spu_id, void *lang)
+void ddvd_get_spu_byid(struct ddvd *pconfig, int spu_id, void *filter, void *trackflags, void *lang)
 {
 	uint16_t spu_lang = 0xFFFF;
+	uint8_t spu_filter = 0x00;
+	uint8_t spu_trackflags = 0x00;
 	if (spu_id < MAX_SPU && pconfig->spu_map[spu_id].logical_id > -1)
+	{
 		spu_lang = pconfig->spu_map[spu_id].lang;
-	memcpy(lang, &spu_lang, sizeof(uint16_t));
-	Debug(2, "ddvd_get_spu_byid %d: %d %d %c%c\n", spu_id, pconfig->spu_map[spu_id].logical_id,
-			pconfig->spu_map[spu_id].stream_id, spu_lang >> 8, spu_lang & 0xff);
+		spu_filter = pconfig->spu_map[spu_id].filter;
+		spu_trackflags = pconfig->spu_map[spu_id].trackflags;
+	}
+	memcpy(filter, &spu_filter, sizeof(int8_t));
+	memcpy(trackflags, &spu_trackflags, sizeof(int8_t));
+	memcpy(lang, &spu_lang, sizeof(int16_t));
+	Debug(2, "ddvd_get_spu_byid %d: logId %d streamId %d filter %d trackflags %d lang %c%c\n", spu_id, pconfig->spu_map[spu_id].logical_id,
+			pconfig->spu_map[spu_id].stream_id, spu_filter, spu_trackflags, spu_lang >> 8, spu_lang & 0xff);
 }
 
 // get dvd title string
@@ -1733,9 +1750,11 @@ send_message:
 				}
 				uint16_t spu_lang = 0xFFFF;
 				for (spu_index = 0; spu_index < MAX_SPU; spu_index++) {
+					Debug(1, "SPU Stream change: spu_index: %d, logical_id: %d\n", spu_index, playerconfig->spu_map[spu_index].logical_id);
 					if (playerconfig->spu_map[spu_index].logical_id == -1) // gone past last valid spu entry
 						break;
-					if (playerconfig->spu_map[spu_index].stream_id == spu_active_id & 0x1F) {
+					Debug(1, "SPU Stream change: spu_index: %d, stream_id: %d spu_active_id: %d\n", spu_index, playerconfig->spu_map[spu_index].stream_id, spu_active_id);
+					if (playerconfig->spu_map[spu_index].stream_id == ((unsigned char)spu_active_id & 0x1Fu)) {
 						spu_lang = playerconfig->spu_map[spu_index].lang;
 						break;
 					}
@@ -1744,6 +1763,14 @@ send_message:
 					spu_lang = 0x2D2D;	// SPU "off, unknown or maybe menuoverlays"
 					spu_index = -1;
 				}
+				else
+				{
+					playerconfig->spu_map[spu_index].trackflags = 2;
+					if(dvdnav_get_active_spu_stream(dvdnav) & 0x80)
+					{
+						playerconfig->spu_map[spu_index].trackflags += 8;
+					}
+				}
 				msg = DDVD_SHOWOSD_SUBTITLE;
 				safe_write(message_pipe, &msg, sizeof(int));
 				safe_write(message_pipe, &spu_index, sizeof(int));
@@ -1751,6 +1778,7 @@ send_message:
 				//Debug(1, "SPU Stream change: w %X l: %X p: %X active: %X\n",ev->physical_wide,ev->physical_letterbox,ev->physical_pan_scan,spu_active_id);
 				spu_active_id &= 0x1F;
 				playerconfig->last_spu_id = spu_index;
+				Debug(1, "DVDNAV_SPU_STREAM_CHANGE %i\n", spu_index);
 				break;
 
 			case DVDNAV_AUDIO_STREAM_CHANGE:
@@ -1969,7 +1997,9 @@ send_message:
 							if(lang != 0xFFFF) {
 								playerconfig->spu_map[i].logical_id = logical_id;
 								playerconfig->spu_map[i].stream_id = stream_id;
+								playerconfig->spu_map[i].filter = SUB_FILTER_SHOW_ALL;
 								playerconfig->spu_map[i].lang = lang;
+								playerconfig->spu_map[i].trackflags = 0;
 								Debug(2, "    %d: MPEG spu stream %d -> logical stream %d - %04X %c%c\n", i, stream_id, logical_id, lang,
 													lang == 0xFFFF ? 'N' : lang >> 8,
 													lang == 0xFFFF ? 'A' : lang & 0xFF);
@@ -2236,8 +2266,20 @@ send_message:
 			} else
 				ddvd_spu_timer_active = 0;
 
+			int filter = 0;
+			if(playerconfig->last_spu_id >= 0 )
+			{
+				filter = playerconfig->spu_map[playerconfig->last_spu_id].filter;
+			}
+
+			Debug(2, "**** display sub: filter: %d, last_spu_return.force_hide = %d, playerconfig->last_spu_id = %d\n", filter, last_spu_return.force_hide, playerconfig->last_spu_id);
+			if (  (filter != SUB_FILTER_SHOW_ALL)																				&&		/* user selected show all => show all */
+					 ((filter == SUB_FILTER_SHOW_FORCED_ONLY) &&	(last_spu_return.force_hide != SPU_FORCE /*&& !spu_lock*/))	 )	/* user selected show forced only => show only forced subs */
+			{
+#if 0
 			// dont display SPU if spu sets the HIDE command or the current SPU track is marked as hide (bit 7) and the packet had no FORCE command
 			if (last_spu_return.force_hide == SPU_HIDE || ((dvdnav_get_active_spu_stream(dvdnav) & 0x80) && last_spu_return.force_hide != SPU_FORCE && !spu_lock)) {
+#endif
 				ddvd_lbb_changed = 0;
 				ddvd_spu_timer_active = 0;
 			}
@@ -2581,6 +2623,7 @@ key_play:
 						}
 						spu_lock = 1;
 						playerconfig->last_spu_id = spu_index;
+						Debug(1, "DDVD_SET_SUBTITLE %i\n", spu_index);
 						msg = DDVD_SHOWOSD_SUBTITLE;
 						safe_write(message_pipe, &msg, sizeof(int));
 						safe_write(message_pipe, &spu_index, sizeof(int));

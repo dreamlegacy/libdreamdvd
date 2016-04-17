@@ -195,6 +195,8 @@ struct ddvd_progressive_evt {
 struct spu_map_t {
 	int8_t logical_id   :  8;
 	int8_t stream_id    :  8;
+	int8_t filter       :  8;
+	int8_t trackflags   :  8;
 	int16_t lang        : 16;
 };
 

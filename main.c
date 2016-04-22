@@ -250,11 +250,15 @@ void ddvd_set_video_ex(struct ddvd *pconfig, int aspect, int tv_mode, int tv_mod
 }
 
 // set subtitle stream id
-void ddvd_set_spu(struct ddvd *pconfig, int spu_id, int spu_filter)
+void ddvd_set_spu(struct ddvd *pconfig, int spu_id)
 {
-	Debug(2, "ddvd_set_spu to id: %d filter: %d\n", spu_id, spu_filter);
 	ddvd_send_key(pconfig, DDVD_SET_SUBTITLE);
 	ddvd_send_key(pconfig, spu_id);
+}
+
+void ddvd_set_spu_filter(struct ddvd *pconfig, int spu_id, int spu_filter)
+{
+	Debug(2, "ddvd_set_spu_filter[%d] = %d\n", spu_id, spu_filter);
 	pconfig->spu_map[spu_id].filter = spu_filter;
 }
 

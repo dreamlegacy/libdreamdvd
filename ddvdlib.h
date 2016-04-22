@@ -92,7 +92,7 @@ void ddvd_set_resume_pos(struct ddvd *pconfig, struct ddvd_resume resume_info);
 void ddvd_set_audio(struct ddvd *pconfig, int audio_id);
 
 // directly set given subtitle stream id (alternative to iteration through the streams with the DDVD_KEY_SUBTITLE)
-void ddvd_set_spu(struct ddvd *pconfig, int spu_id, int spu_filter);
+void ddvd_set_spu(struct ddvd *pconfig, int spu_id);
 
 /* 
  * functions for starting the dvd player
@@ -177,6 +177,8 @@ void ddvd_get_spu_byid(struct ddvd *pconfig, int spu_id, int16_t *lang);
 #define DDVD_SUPPORTS_TRACK_FLAGS 1
 // get track filter and flags for given subtitle track id
 void ddvd_get_spu_filter_flags_byid(struct ddvd *pconfig, int spu_id, int8_t *filter, int8_t *trackflags);
+// set spu filter for given subtitle track id
+void ddvd_set_spu_filter(struct ddvd *pconfig, int spu_id, int spu_filter);
 
 // get the number of available subtitle tracks
 void ddvd_get_spu_count(struct ddvd *pconfig, int *count);

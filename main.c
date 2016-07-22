@@ -38,6 +38,11 @@ typedef enum
 	SUB_FILTER_SHOW_ALL         =  2
 } SubFilter;
 
+typedef enum
+{
+	TRACK_DEFAULT = (1 << 1),
+	TRACK_FORCED  = (1 << 3)
+} TrackFlags;
 
 int DebugLevel = 1;
 
@@ -1779,10 +1784,19 @@ send_message:
 				}
 				else
 				{
-					playerconfig->spu_map[spu_index].trackflags = 2;
 					if(dvdnav_get_active_spu_stream(dvdnav) & 0x80)
 					{
-						playerconfig->spu_map[spu_index].trackflags += 8;
+						/* track shall be hidden
+							=> possible mixed track
+							=> set default track flag and switch filter to show forced only subs */
+						playerconfig->spu_map[spu_index].trackflags = TRACK_DEFAULT;
+						playerconfig->spu_map[spu_index].filter = SUB_FILTER_SHOW_FORCED_ONLY;
+					}
+					else
+				{
+						/* track shall be showed regardless of sub flags
+							=> set forced track flag (filter is already set to show all subs) */
+						playerconfig->spu_map[spu_index].trackflags = TRACK_FORCED;
 					}
 				}
 				msg = DDVD_SHOWOSD_SUBTITLE;

@@ -1955,7 +1955,7 @@ send_message:
 						uint64_t start=ddvd_get_time();
 						int resized = 0;
 
-						if ((x_offset != 0 || y_offset != 0 || y_source != ddvd_screeninfo_yres || ddvd_screeninfo_xres != 720) && !playerconfig->canscale)
+						if ((x_offset != 0 || y_offset != 0 || y_source != ddvd_screeninfo_yres || ddvd_screeninfo_xres != 720) && (!playerconfig->canscale || ddvd_have_ntsc == 1))
 						{
 //							Debug(1, "resizing\n");
 							resized = 1;
@@ -2789,7 +2789,7 @@ key_play:
 
 			uint64_t start=ddvd_get_time();
 			int resized = 0;
-			if ((x_offset != 0 || y_offset != 0 || y_source != ddvd_screeninfo_yres || ddvd_screeninfo_xres != 720) && !playerconfig->canscale)
+			if ((x_offset != 0 || y_offset != 0 || y_source != ddvd_screeninfo_yres || ddvd_screeninfo_xres != 720) && (!playerconfig->canscale || ddvd_have_ntsc == 1))
 			{
 //				Debug(1, "resizing.. (x=%d y=%d %d %d, %d)\n", x_offset, y_offset, y_source, ddvd_screeninfo_yres, ddvd_screeninfo_xres );
 				blit_area = ddvd_resize_pixmap_spu(ddvd_lbb2, 720, y_source, ddvd_screeninfo_xres, ddvd_screeninfo_yres, x_offset, y_offset, blit_area.x_start, blit_area.x_end, blit_area.y_start, blit_area.y_end, ddvd_screeninfo_bypp); // resize

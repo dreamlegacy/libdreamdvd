@@ -719,7 +719,7 @@ enum ddvd_result ddvd_run(struct ddvd *playerconfig)
 	enum ddvd_result res = DDVD_OK;
 	int msg;
 	// try to load liba52.so.0 for softdecoding
-	int have_liba52 = ddvd_load_liba52();
+	int have_liba52 = 0; // ddvd_load_liba52();
 
 	uint8_t flush_av_buffer = NO_AV_FLUSH;
 
